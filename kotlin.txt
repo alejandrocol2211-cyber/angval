@@ -1,2 +1,2 @@
-Nombre: Alejandro Vargas
-Correo: alejandrocol2211@gmail.com
+nombre: alejandro vargas 
+correo: alejandrocol2211@gmail.com
