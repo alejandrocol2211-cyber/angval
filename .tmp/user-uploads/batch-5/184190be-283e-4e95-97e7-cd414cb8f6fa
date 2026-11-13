@@ -1,0 +1,58 @@
+interface LogoProps {
+  size?: "sm" | "md" | "lg";
+  variant?: "dark" | "light";
+}
+
+export function Logo({ size = "md", variant = "dark" }: LogoProps) {
+  const scales = { sm: 0.7, md: 1, lg: 1.5 };
+  const s = scales[size];
+  const textColor = variant === "light" ? "#FFFFFF" : "#2A1520";
+  const subColor = variant === "light" ? "rgba(255,255,255,0.65)" : "#8C6D6D";
+
+  return (
+    <div className="flex items-center gap-2.5" style={{ transform: `scale(${s})`, transformOrigin: "left center" }}>
+      {/* Icon mark */}
+      <svg width="36" height="36" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="18" cy="18" r="18" fill="url(#br-grad)" />
+        {/* Stylized BR monogram */}
+        <path
+          d="M11 10h7.5c2.5 0 4 1.2 4 3.2 0 1.4-.8 2.4-2 2.9 1.6.4 2.8 1.6 2.8 3.3C23.3 22 21.5 23.5 18.8 23.5H11V10z M13.5 15.2h4.5c1.2 0 1.9-.6 1.9-1.6s-.7-1.6-1.9-1.6h-4.5v3.2z M13.5 21.5h5.1c1.4 0 2.1-.7 2.1-1.8s-.7-1.8-2.1-1.8h-5.1v3.6z"
+          fill="white"
+        />
+        <defs>
+          <linearGradient id="br-grad" x1="0" y1="0" x2="36" y2="36" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#B8324A" />
+            <stop offset="0.5" stopColor="#8B2A5A" />
+            <stop offset="1" stopColor="#C9973A" />
+          </linearGradient>
+        </defs>
+      </svg>
+
+      {/* Wordmark */}
+      <div className="flex flex-col leading-none">
+        <span
+          className="font-bold tracking-tight"
+          style={{
+            fontFamily: "'Playfair Display', serif",
+            fontSize: "18px",
+            color: textColor,
+            letterSpacing: "-0.02em",
+          }}
+        >
+          AngVal <span style={{ color: "#B8324A" }}>Beauty</span>
+        </span>
+        <span
+          className="font-medium tracking-widest uppercase"
+          style={{
+            fontFamily: "'DM Sans', sans-serif",
+            fontSize: "7px",
+            color: subColor,
+            letterSpacing: "0.18em",
+          }}
+        >
+          Cosmetics
+        </span>
+      </div>
+    </div>
+  );
+}

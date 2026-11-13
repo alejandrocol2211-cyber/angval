@@ -1,0 +1,289 @@
+import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+
+export interface Address {
+  fullName: string;
+  phone: string;
+  department: string;
+  city: string;
+  street: string;
+  reference: string;
+}
+
+export interface Order {
+  id: string;
+  date: string;
+  items: { name: string; brand: string; price: number; quantity: number; image: string }[];
+  total: number;
+  status: "Procesando" | "Enviado" | "En camino" | "Entregado";
+  paymentMethod: string;
+  address: Address;
+}
+
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: "customer" | "admin" | "deputy";
+  permissions: StaffPermission[];
+  phone?: string;
+  addresses: Address[];
+  orders: Order[];
+}
+
+export type StaffPermission =
+  | "inventory"
+  | "orders"
+  | "exports"
+  | "viewCustomers"
+  | "manageCustomers"
+  | "settings";
+
+export interface ManagedAccount {
+  id: string;
+  name: string;
+  email: string;
+  role: User["role"];
+  permissions: StaffPermission[];
+  source: "staff" | "registered";
+}
+
+interface AuthContextValue {
+  user: User | null;
+  login: (email: string, password: string) => Promise<{ ok: boolean; error?: string; role?: User["role"] }>;
+  register: (name: string, email: string, password: string) => Promise<{ ok: boolean; error?: string }>;
+  logout: () => void;
+  saveAddress: (address: Address) => void;
+  addOrder: (order: Omit<Order, "id" | "date" | "status">) => Order;
+  authOpen: boolean;
+  setAuthOpen: (open: boolean) => void;
+  authMode: "login" | "register";
+  setAuthMode: (mode: "login" | "register") => void;
+}
+
+const AuthContext = createContext<AuthContextValue | null>(null);
+
+const STORAGE_KEY = "beauty_rush_users";
+const SESSION_KEY = "beauty_rush_session";
+const STAFF_ACCESS_KEY = "beauty_rush_staff_access";
+export const DEFAULT_DEPUTY_PERMISSIONS: StaffPermission[] = ["inventory", "orders", "exports"];
+const STAFF_ACCOUNTS: Record<string, { password: string; user: User }> = {
+  "balzanfrank40@gmail.com": {
+    password: "qwerty",
+    user: {
+      id: "admin-001",
+      name: "Frank Balzan",
+      email: "balzanfrank40@gmail.com",
+      role: "admin",
+      permissions: [],
+      addresses: [],
+      orders: [],
+    },
+  },
+  "deivy@gmail.com": {
+    password: "asdfgh",
+    user: {
+      id: "deputy-001",
+      name: "Deivy",
+      email: "deivy@gmail.com",
+      role: "deputy",
+      permissions: DEFAULT_DEPUTY_PERMISSIONS,
+      addresses: [],
+      orders: [],
+    },
+  },
+};
+
+function loadStaffAccess(): Record<string, { role: User["role"]; permissions: StaffPermission[] }> {
+  try {
+    return JSON.parse(localStorage.getItem(STAFF_ACCESS_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+export function listManagedAccounts(): ManagedAccount[] {
+  const staffAccess = loadStaffAccess();
+  const staff = Object.values(STAFF_ACCOUNTS).map(({ user }) => {
+    const override = staffAccess[user.email];
+    return {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: override?.role || user.role,
+      permissions: override?.permissions || user.permissions || [],
+      source: "staff" as const,
+    };
+  });
+  const registered = Object.values(loadUsers()).map(({ user }) => ({
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    role: user.role || "customer" as const,
+    permissions: user.permissions || [],
+    source: "registered" as const,
+  }));
+  return [...staff, ...registered];
+}
+
+export function updateManagedAccount(
+  email: string,
+  role: "customer" | "deputy",
+  permissions: StaffPermission[],
+) {
+  const key = email.toLowerCase();
+  if (key === "balzanfrank40@gmail.com") return false;
+  const normalizedPermissions = role === "deputy" ? permissions : [];
+  if (STAFF_ACCOUNTS[key]) {
+    const access = loadStaffAccess();
+    access[key] = { role, permissions: normalizedPermissions };
+    localStorage.setItem(STAFF_ACCESS_KEY, JSON.stringify(access));
+    return true;
+  }
+  const users = loadUsers();
+  if (!users[key]) return false;
+  users[key].user = { ...users[key].user, role, permissions: normalizedPermissions };
+  saveUsers(users);
+  return true;
+}
+
+function loadUsers(): Record<string, { password: string; user: User }> {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  } catch {
+    return {};
+  }
+}
+
+function saveUsers(users: Record<string, { password: string; user: User }>) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(users));
+}
+
+function loadSession(): User | null {
+  try {
+    const raw = sessionStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw) as User;
+    return { ...session, role: session.role || "customer", permissions: session.permissions || [] };
+  } catch {
+    return null;
+  }
+}
+
+export function AuthProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(loadSession);
+  const [authOpen, setAuthOpen] = useState(false);
+  const [authMode, setAuthMode] = useState<"login" | "register">("login");
+
+  const login = useCallback(async (email: string, password: string) => {
+    await new Promise((r) => setTimeout(r, 600));
+    const key = email.trim().toLowerCase();
+    const staffEntry = STAFF_ACCOUNTS[key];
+    if (staffEntry) {
+      if (staffEntry.password !== password) {
+        return { ok: false, error: "Correo o contraseña incorrectos." };
+      }
+      const override = loadStaffAccess()[key];
+      const staffUser = {
+        ...staffEntry.user,
+        role: override?.role || staffEntry.user.role,
+        permissions: override?.permissions || staffEntry.user.permissions || [],
+      };
+      setUser(staffUser);
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(staffUser));
+      return { ok: true, role: staffUser.role };
+    }
+    const users = loadUsers();
+    const entry = users[key];
+    if (!entry || entry.password !== password) {
+      return { ok: false, error: "Correo o contraseña incorrectos." };
+    }
+    // Refresh user data from storage
+    const fresh = {
+      ...entry.user,
+      role: entry.user.role || "customer",
+      permissions: entry.user.permissions || [],
+    } as User;
+    setUser(fresh);
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(fresh));
+    return { ok: true, role: fresh.role };
+  }, []);
+
+  const register = useCallback(async (name: string, email: string, password: string) => {
+    await new Promise((r) => setTimeout(r, 700));
+    const users = loadUsers();
+    const key = email.toLowerCase();
+    if (users[key] || STAFF_ACCOUNTS[key]) {
+      return { ok: false, error: "Ya existe una cuenta con este correo." };
+    }
+    const newUser: User = {
+      id: Date.now().toString(),
+      name,
+      email: key,
+      role: "customer",
+      permissions: [],
+      addresses: [],
+      orders: [],
+    };
+    users[key] = { password, user: newUser };
+    saveUsers(users);
+    setUser(newUser);
+    sessionStorage.setItem(SESSION_KEY, JSON.stringify(newUser));
+    return { ok: true };
+  }, []);
+
+  const logout = useCallback(() => {
+    setUser(null);
+    sessionStorage.removeItem(SESSION_KEY);
+  }, []);
+
+  const saveAddress = useCallback((address: Address) => {
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, addresses: [address, ...prev.addresses.filter((_, i) => i < 2)] };
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+      // persist to users store
+      const users = loadUsers();
+      if (users[prev.email]) {
+        users[prev.email].user = updated;
+        saveUsers(users);
+      }
+      return updated;
+    });
+  }, []);
+
+  const addOrder = useCallback((order: Omit<Order, "id" | "date" | "status">) => {
+    const newOrder: Order = {
+      ...order,
+      id: `BR-${Date.now().toString().slice(-6)}`,
+      date: new Date().toLocaleDateString("es-CO", { year: "numeric", month: "long", day: "numeric" }),
+      status: "Procesando",
+    };
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, orders: [newOrder, ...prev.orders] };
+      sessionStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+      const users = loadUsers();
+      if (users[prev.email]) {
+        users[prev.email].user = updated;
+        saveUsers(users);
+      }
+      return updated;
+    });
+    return newOrder;
+  }, []);
+
+  return (
+    <AuthContext.Provider value={{
+      user, login, register, logout, saveAddress, addOrder,
+      authOpen, setAuthOpen, authMode, setAuthMode,
+    }}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+export function useAuth() {
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used within AuthProvider");
+  return ctx;
+}

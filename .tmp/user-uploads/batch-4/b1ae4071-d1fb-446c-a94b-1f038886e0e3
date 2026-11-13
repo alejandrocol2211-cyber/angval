@@ -1,0 +1,306 @@
+import { useState } from "react";
+import { useNavigate, Link } from "react-router";
+import { Eye, EyeOff, Sparkles, ArrowLeft, User, Package, MapPin, LogOut, ChevronRight } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
+import { Logo } from "../components/Logo";
+
+function InputField({
+  label, type = "text", value, onChange, placeholder, error,
+}: {
+  label: string; type?: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; error?: string;
+}) {
+  const [show, setShow] = useState(false);
+  const isPass = type === "password";
+  return (
+    <div className="space-y-1">
+      <label className="text-sm font-semibold text-foreground">{label}</label>
+      <div className="relative">
+        <input
+          type={isPass && show ? "text" : type}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder}
+          className={`w-full px-4 py-3 rounded-xl border text-sm bg-background text-foreground placeholder:text-muted-foreground outline-none transition-all
+            ${error ? "border-destructive focus:ring-2 focus:ring-destructive/20" : "border-border focus:border-[#B8324A] focus:ring-2 focus:ring-[#B8324A]/10"}`}
+        />
+        {isPass && (
+          <button
+            type="button"
+            onClick={() => setShow((s) => !s)}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          >
+            {show ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+          </button>
+        )}
+      </div>
+      {error && <p className="text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+function LoginForm({ onSuccess }: { onSuccess: (role: "customer" | "admin" | "deputy") => void }) {
+  const { login, setAuthMode } = useAuth();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email || !password) { setError("Completa todos los campos."); return; }
+    setLoading(true);
+    setError("");
+    const res = await login(email, password);
+    setLoading(false);
+    if (!res.ok) setError(res.error || "Error al iniciar sesión.");
+    else onSuccess(res.role || "customer");
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <InputField label="Correo electrónico" type="email" value={email} onChange={setEmail} placeholder="tu@correo.com" />
+      <InputField label="Contraseña" type="password" value={password} onChange={setPassword} placeholder="••••••••" />
+      {error && <p className="text-sm text-destructive bg-destructive/8 rounded-lg px-3 py-2">{error}</p>}
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full bg-[#B8324A] hover:bg-[#9e2a3f] disabled:opacity-60 text-white py-3.5 rounded-full font-semibold text-sm transition-colors"
+      >
+        {loading ? "Ingresando..." : "Iniciar sesión"}
+      </button>
+      <p className="text-center text-sm text-muted-foreground">
+        ¿No tienes cuenta?{" "}
+        <button type="button" onClick={() => setAuthMode("register")} className="text-[#B8324A] font-semibold hover:underline">
+          Regístrate gratis
+        </button>
+      </p>
+    </form>
+  );
+}
+
+function RegisterForm({ onSuccess }: { onSuccess: () => void }) {
+  const { register, setAuthMode } = useAuth();
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirm, setConfirm] = useState("");
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const errs: Record<string, string> = {};
+    if (!name.trim()) errs.name = "Ingresa tu nombre.";
+    if (!email.includes("@")) errs.email = "Correo inválido.";
+    if (password.length < 6) errs.password = "Mínimo 6 caracteres.";
+    if (password !== confirm) errs.confirm = "Las contraseñas no coinciden.";
+    setErrors(errs);
+    if (Object.keys(errs).length > 0) return;
+    setLoading(true);
+    const res = await register(name.trim(), email, password);
+    setLoading(false);
+    if (!res.ok) setErrors({ email: res.error || "Error al registrarse." });
+    else onSuccess();
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <InputField label="Nombre completo" value={name} onChange={setName} placeholder="Ana García" error={errors.name} />
+      <InputField label="Correo electrónico" type="email" value={email} onChange={setEmail} placeholder="tu@correo.com" error={errors.email} />
+      <InputField label="Contraseña" type="password" value={password} onChange={setPassword} placeholder="Mínimo 6 caracteres" error={errors.password} />
+      <InputField label="Confirmar contraseña" type="password" value={confirm} onChange={setConfirm} placeholder="Repite tu contraseña" error={errors.confirm} />
+      <button
+        type="submit"
+        disabled={loading}
+        className="w-full bg-[#B8324A] hover:bg-[#9e2a3f] disabled:opacity-60 text-white py-3.5 rounded-full font-semibold text-sm transition-colors"
+      >
+        {loading ? "Creando cuenta..." : "Crear cuenta gratis"}
+      </button>
+      <p className="text-center text-xs text-muted-foreground">
+        Al registrarte aceptas nuestros{" "}
+        <span className="text-[#B8324A] cursor-pointer hover:underline">Términos de uso</span>{" "}
+        y{" "}
+        <span className="text-[#B8324A] cursor-pointer hover:underline">Política de privacidad</span>.
+      </p>
+      <p className="text-center text-sm text-muted-foreground">
+        ¿Ya tienes cuenta?{" "}
+        <button type="button" onClick={() => setAuthMode("login")} className="text-[#B8324A] font-semibold hover:underline">
+          Iniciar sesión
+        </button>
+      </p>
+    </form>
+  );
+}
+
+export function AuthPage() {
+  const navigate = useNavigate();
+  const { authMode, setAuthMode, user, logout } = useAuth();
+
+  if (user) {
+    const isStaff = user.role === "admin" || user.role === "deputy";
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-12">
+        {/* Profile */}
+        <div className="bg-card border border-border rounded-2xl overflow-hidden mb-6">
+          <div className="bg-gradient-to-r from-[#2A1520] to-[#4A2535] px-6 py-8 flex items-center gap-4">
+            <div className="w-16 h-16 rounded-full bg-gradient-to-br from-[#B8324A] to-[#C9973A] flex items-center justify-center text-white text-xl font-bold">
+              {user.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-white" style={{ fontFamily: "'Playfair Display', serif" }}>{user.name}</h2>
+              <p className="text-white/60 text-sm">{user.email}</p>
+            </div>
+          </div>
+          <div className="divide-y divide-border">
+            {isStaff && (
+              <button
+                onClick={() => navigate("/admin")}
+                className="w-full flex items-center gap-4 px-6 py-4 bg-accent/60 hover:bg-accent transition-colors text-left"
+              >
+                <div className="w-9 h-9 bg-primary rounded-full flex items-center justify-center flex-shrink-0">
+                  <Sparkles className="w-4 h-4 text-primary-foreground" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">Panel de administración</p>
+                  <p className="text-xs text-muted-foreground">
+                    {user.role === "admin" ? "Acceso total" : "Operación logística"}
+                  </p>
+                </div>
+                <ChevronRight className="w-4 h-4 text-muted-foreground" />
+              </button>
+            )}
+            {[
+              { icon: Package, label: "Mis pedidos", desc: `${user.orders.length} pedidos realizados`, path: "/perfil/pedidos" },
+              { icon: MapPin, label: "Mis direcciones", desc: user.addresses[0] ? user.addresses[0].street : "Sin direcciones guardadas", path: "/perfil/direcciones" },
+              { icon: User, label: "Datos de la cuenta", desc: user.email, path: null },
+            ].map(({ icon: Icon, label, desc, path }) => (
+              <button
+                key={label}
+                onClick={() => path && navigate(path)}
+                className="w-full flex items-center gap-4 px-6 py-4 hover:bg-muted transition-colors text-left"
+              >
+                <div className="w-9 h-9 bg-accent rounded-full flex items-center justify-center flex-shrink-0">
+                  <Icon className="w-4 h-4 text-[#B8324A]" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-foreground">{label}</p>
+                  <p className="text-xs text-muted-foreground truncate">{desc}</p>
+                </div>
+                {path && <ChevronRight className="w-4 h-4 text-muted-foreground" />}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Orders */}
+        {user.orders.length > 0 && (
+          <div className="bg-card border border-border rounded-2xl overflow-hidden mb-6">
+            <div className="px-6 py-4 border-b border-border">
+              <h3 className="font-bold text-foreground" style={{ fontFamily: "'Playfair Display', serif" }}>Pedidos recientes</h3>
+            </div>
+            <div className="divide-y divide-border">
+              {user.orders.slice(0, 3).map((order) => {
+                const statusColors: Record<string, string> = {
+                  "Procesando": "bg-yellow-100 text-yellow-700",
+                  "Enviado": "bg-blue-100 text-blue-700",
+                  "En camino": "bg-orange-100 text-orange-700",
+                  "Entregado": "bg-green-100 text-green-700",
+                };
+                return (
+                  <div key={order.id} className="px-6 py-4">
+                    <div className="flex items-start justify-between mb-2">
+                      <div>
+                        <p className="text-sm font-bold text-foreground">{order.id}</p>
+                        <p className="text-xs text-muted-foreground">{order.date}</p>
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full ${statusColors[order.status]}`}>{order.status}</span>
+                        <p className="text-sm font-bold text-[#B8324A]">${order.total.toFixed(2)}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{order.items.length} producto{order.items.length !== 1 ? "s" : ""} · {order.paymentMethod}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        <button
+          onClick={logout}
+          className="w-full flex items-center justify-center gap-2 py-3.5 border border-border rounded-full text-sm font-semibold text-muted-foreground hover:border-destructive hover:text-destructive transition-colors"
+        >
+          <LogOut className="w-4 h-4" /> Cerrar sesión
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-12">
+      <div className="w-full max-w-md">
+        {/* Card */}
+        <div className="bg-card border border-border rounded-3xl overflow-hidden shadow-xl shadow-black/5">
+          {/* Header */}
+          <div className="bg-gradient-to-br from-[#2A1520] to-[#4A2535] px-8 py-8 text-center">
+            <div className="flex justify-center mb-4">
+              <Logo variant="light" />
+            </div>
+            <p className="text-white/60 text-sm">
+              {authMode === "login" ? "Bienvenida de vuelta 💄" : "Únete a la comunidad Beauty Rush ✨"}
+            </p>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-border">
+            {[
+              { key: "login", label: "Iniciar sesión" },
+              { key: "register", label: "Registrarse" },
+            ].map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setAuthMode(tab.key as "login" | "register")}
+                className={`flex-1 py-3.5 text-sm font-semibold transition-colors ${
+                  authMode === tab.key
+                    ? "text-[#B8324A] border-b-2 border-[#B8324A] bg-[#B8324A]/4"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {tab.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="px-8 py-7">
+            {authMode === "login" ? (
+              <LoginForm onSuccess={(role) => navigate(role === "customer" ? "/tienda" : "/admin")} />
+            ) : (
+              <RegisterForm onSuccess={() => navigate("/tienda")} />
+            )}
+          </div>
+
+          {/* Guest option */}
+          <div className="px-8 pb-7">
+            <div className="relative flex items-center gap-3 mb-5">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs text-muted-foreground">o continúa como invitado</span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+            <Link
+              to="/catalogo"
+              className="block w-full text-center py-3 border border-border rounded-full text-sm font-semibold text-muted-foreground hover:border-foreground hover:text-foreground transition-colors"
+            >
+              Explorar sin registrarse →
+            </Link>
+          </div>
+        </div>
+
+        <div className="mt-5 flex items-center justify-center gap-2 text-xs text-muted-foreground">
+          <Sparkles className="w-3 h-3 text-[#C9973A]" />
+          Tus datos están seguros con nosotras
+        </div>
+      </div>
+    </div>
+  );
+}

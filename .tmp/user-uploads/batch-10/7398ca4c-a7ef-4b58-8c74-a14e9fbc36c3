@@ -1,0 +1,42 @@
+import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
+
+interface DarkModeContextValue {
+  dark: boolean;
+  toggle: () => void;
+}
+
+const DarkModeContext = createContext<DarkModeContextValue | null>(null);
+
+export function DarkModeProvider({ children }: { children: ReactNode }) {
+  const [dark, setDark] = useState(() => {
+    try {
+      return localStorage.getItem("beauty_rush_dark") === "true";
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (dark) {
+      root.classList.add("dark");
+    } else {
+      root.classList.remove("dark");
+    }
+    localStorage.setItem("beauty_rush_dark", String(dark));
+  }, [dark]);
+
+  const toggle = useCallback(() => setDark((d) => !d), []);
+
+  return (
+    <DarkModeContext.Provider value={{ dark, toggle }}>
+      {children}
+    </DarkModeContext.Provider>
+  );
+}
+
+export function useDarkMode() {
+  const ctx = useContext(DarkModeContext);
+  if (!ctx) throw new Error("useDarkMode must be used within DarkModeProvider");
+  return ctx;
+}

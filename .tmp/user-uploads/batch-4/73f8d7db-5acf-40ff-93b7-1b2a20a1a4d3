@@ -1,0 +1,958 @@
+import { useMemo, useState } from "react";
+import { Navigate, useNavigate } from "react-router";
+import {
+  BarChart3,
+  Box,
+  CheckCircle2,
+  ChevronRight,
+  ClipboardList,
+  Download,
+  LayoutDashboard,
+  LockKeyhole,
+  LogOut,
+  Menu,
+  Package,
+  Pencil,
+  Plus,
+  Search,
+  Settings,
+  ShieldCheck,
+  ShoppingBag,
+  Trash2,
+  TrendingUp,
+  Truck,
+  UserCog,
+  Users,
+  X,
+} from "lucide-react";
+import {
+  listManagedAccounts,
+  updateManagedAccount,
+  useAuth,
+  type ManagedAccount,
+  type StaffPermission,
+} from "../context/AuthContext";
+import { CATEGORIES, PRODUCTS, saveManagedProducts, type Product } from "../data/products";
+import { Logo } from "../components/Logo";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+import { Badge } from "../components/ui/badge";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "../components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../components/ui/select";
+import { Switch } from "../components/ui/switch";
+import { Checkbox } from "../components/ui/checkbox";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "../components/ui/table";
+
+type Section = "overview" | "products" | "orders" | "customers" | "settings";
+type OrderStatus = "Pendiente" | "Preparando" | "Despachado" | "Entregado" | "Cancelado";
+
+interface AdminOrder {
+  id: string;
+  customer: string;
+  email: string;
+  city: string;
+  date: string;
+  items: number;
+  total: number;
+  carrier: string;
+  status: OrderStatus;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  email: string;
+  orders: number;
+  spent: number;
+  status: "Activo" | "Suspendido";
+}
+
+const ORDER_STORAGE_KEY = "angval_admin_orders";
+const CUSTOMER_STORAGE_KEY = "angval_admin_customers";
+
+const PERMISSION_OPTIONS: Array<{ id: StaffPermission; label: string; description: string }> = [
+  { id: "inventory", label: "Inventario", description: "Consultar productos y actualizar existencias." },
+  { id: "orders", label: "Pedidos y logística", description: "Cambiar estados de preparación, despacho y entrega." },
+  { id: "exports", label: "Exportar reportes", description: "Descargar archivos CSV de inventario y pedidos." },
+  { id: "viewCustomers", label: "Consultar clientes", description: "Ver el directorio y la actividad de clientes." },
+  { id: "manageCustomers", label: "Gestionar clientes", description: "Suspender y reactivar cuentas de clientes." },
+  { id: "settings", label: "Configuración operativa", description: "Modificar alertas y automatizaciones." },
+];
+
+const INITIAL_ORDERS: AdminOrder[] = [
+  { id: "AV-1048", customer: "Mariana López", email: "mariana@email.com", city: "Medellín", date: "18 jun 2026", items: 3, total: 124.97, carrier: "Coordinadora", status: "Preparando" },
+  { id: "AV-1047", customer: "Laura Pérez", email: "laura@email.com", city: "Bogotá", date: "18 jun 2026", items: 2, total: 78.00, carrier: "Servientrega", status: "Pendiente" },
+  { id: "AV-1046", customer: "Sara Ramírez", email: "sara@email.com", city: "Cali", date: "17 jun 2026", items: 4, total: 156.48, carrier: "Interrapidísimo", status: "Despachado" },
+  { id: "AV-1045", customer: "Daniela Ruiz", email: "daniela@email.com", city: "Barranquilla", date: "17 jun 2026", items: 1, total: 42.00, carrier: "Coordinadora", status: "Entregado" },
+  { id: "AV-1044", customer: "Valentina Mora", email: "valentina@email.com", city: "Pereira", date: "16 jun 2026", items: 2, total: 68.49, carrier: "Servientrega", status: "Entregado" },
+];
+
+const INITIAL_CUSTOMERS: Customer[] = [
+  { id: "CL-204", name: "Mariana López", email: "mariana@email.com", orders: 8, spent: 624.50, status: "Activo" },
+  { id: "CL-203", name: "Laura Pérez", email: "laura@email.com", orders: 3, spent: 218.00, status: "Activo" },
+  { id: "CL-202", name: "Sara Ramírez", email: "sara@email.com", orders: 12, spent: 987.40, status: "Activo" },
+  { id: "CL-201", name: "Daniela Ruiz", email: "daniela@email.com", orders: 1, spent: 42.00, status: "Activo" },
+];
+
+const EMPTY_PRODUCT = {
+  name: "",
+  brand: "AngVal Beauty",
+  category: "Maquillaje",
+  subcategory: "General",
+  price: "",
+  stock: "",
+  image: "",
+  description: "",
+};
+
+function loadStored<T>(key: string, fallback: T): T {
+  try {
+    const value = localStorage.getItem(key);
+    return value ? JSON.parse(value) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function downloadCsv(filename: string, rows: Array<Array<string | number>>) {
+  const csv = rows.map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n");
+  const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function statusClasses(status: OrderStatus) {
+  if (status === "Entregado") return "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300";
+  if (status === "Despachado") return "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300";
+  if (status === "Preparando") return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300";
+  if (status === "Cancelado") return "bg-destructive/10 text-destructive";
+  return "bg-muted text-muted-foreground";
+}
+
+export function Admin() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const isAdmin = user?.role === "admin";
+  const [section, setSection] = useState<Section>("overview");
+  const [mobileMenu, setMobileMenu] = useState(false);
+  const [products, setProducts] = useState<Product[]>(() => [...PRODUCTS]);
+  const [orders, setOrders] = useState<AdminOrder[]>(() => loadStored(ORDER_STORAGE_KEY, INITIAL_ORDERS));
+  const [customers, setCustomers] = useState<Customer[]>(() => loadStored(CUSTOMER_STORAGE_KEY, INITIAL_CUSTOMERS));
+  const [accounts, setAccounts] = useState<ManagedAccount[]>(listManagedAccounts);
+  const [query, setQuery] = useState("");
+  const [productDialog, setProductDialog] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productForm, setProductForm] = useState(EMPTY_PRODUCT);
+  const [notice, setNotice] = useState("");
+  const [accessDialog, setAccessDialog] = useState(false);
+  const [editingAccount, setEditingAccount] = useState<ManagedAccount | null>(null);
+  const [accessRole, setAccessRole] = useState<"customer" | "deputy">("customer");
+  const [accessPermissions, setAccessPermissions] = useState<StaffPermission[]>([]);
+  const [settings, setSettings] = useState(() =>
+    loadStored("angval_admin_settings", {
+      lowStockAlerts: true,
+      orderNotifications: true,
+      autoDispatch: false,
+    }),
+  );
+
+  const filteredProducts = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return products;
+    return products.filter((product) =>
+      [product.name, product.brand, product.category].some((value) => value.toLowerCase().includes(normalized)),
+    );
+  }, [products, query]);
+
+  const filteredOrders = useMemo(() => {
+    const normalized = query.trim().toLowerCase();
+    if (!normalized) return orders;
+    return orders.filter((order) =>
+      [order.id, order.customer, order.city, order.status].some((value) => value.toLowerCase().includes(normalized)),
+    );
+  }, [orders, query]);
+
+  if (!user) return <Navigate to="/auth" replace />;
+  if (user.role === "customer") return <Navigate to="/tienda" replace />;
+
+  const hasPermission = (permission: StaffPermission) =>
+    isAdmin || (user.permissions || []).includes(permission);
+
+  const showNotice = (message: string) => {
+    setNotice(message);
+    window.setTimeout(() => setNotice(""), 2600);
+  };
+
+  const changeSection = (next: Section) => {
+    const allowed =
+      next === "overview"
+      || (next === "products" && hasPermission("inventory"))
+      || (next === "orders" && hasPermission("orders"))
+      || (next === "customers" && (hasPermission("viewCustomers") || hasPermission("manageCustomers")))
+      || (next === "settings" && hasPermission("settings"));
+    if (!allowed) return;
+    setQuery("");
+    setSection(next);
+    setMobileMenu(false);
+  };
+
+  const persistProducts = (next: Product[]) => {
+    setProducts(next);
+    saveManagedProducts(next);
+  };
+
+  const openProduct = (product?: Product) => {
+    setEditingProduct(product || null);
+    setProductForm(product ? {
+      name: product.name,
+      brand: product.brand,
+      category: product.category,
+      subcategory: product.subcategory,
+      price: String(product.price),
+      stock: String(product.stock),
+      image: product.image,
+      description: product.description,
+    } : EMPTY_PRODUCT);
+    setProductDialog(true);
+  };
+
+  const submitProduct = (event: React.FormEvent) => {
+    event.preventDefault();
+    const stock = Number(productForm.stock);
+    if (!Number.isFinite(stock) || stock < 0) return;
+
+    if (!isAdmin && editingProduct) {
+      persistProducts(products.map((product) => product.id === editingProduct.id ? { ...product, stock } : product));
+      setProductDialog(false);
+      showNotice("Inventario actualizado correctamente.");
+      return;
+    }
+
+    const price = Number(productForm.price);
+    if (!productForm.name.trim() || !Number.isFinite(price) || price <= 0) return;
+    const payload: Product = {
+      id: editingProduct?.id || Math.max(0, ...products.map((product) => product.id)) + 1,
+      name: productForm.name.trim(),
+      brand: productForm.brand.trim(),
+      category: productForm.category,
+      subcategory: productForm.subcategory.trim() || "General",
+      price,
+      stock,
+      image: productForm.image.trim() || "https://images.unsplash.com/photo-1596462502278-27bfdc403348?w=600&h=600&fit=crop&auto=format",
+      rating: editingProduct?.rating || 5,
+      reviews: editingProduct?.reviews || 0,
+      description: productForm.description.trim(),
+      details: editingProduct?.details || ["Producto original", "Disponible en AngVal Beauty"],
+      badge: editingProduct?.badge,
+      originalPrice: editingProduct?.originalPrice,
+    };
+    persistProducts(editingProduct
+      ? products.map((product) => product.id === editingProduct.id ? payload : product)
+      : [payload, ...products]);
+    setProductDialog(false);
+    showNotice(editingProduct ? "Producto actualizado correctamente." : "Producto creado correctamente.");
+  };
+
+  const deleteProduct = (product: Product) => {
+    if (!isAdmin || !window.confirm(`¿Eliminar "${product.name}" del catálogo?`)) return;
+    persistProducts(products.filter((item) => item.id !== product.id));
+    showNotice("Producto eliminado del catálogo.");
+  };
+
+  const updateOrderStatus = (id: string, status: OrderStatus) => {
+    const next = orders.map((order) => order.id === id ? { ...order, status } : order);
+    setOrders(next);
+    localStorage.setItem(ORDER_STORAGE_KEY, JSON.stringify(next));
+    showNotice(`Pedido ${id} actualizado a ${status}.`);
+  };
+
+  const toggleCustomer = (id: string) => {
+    if (!hasPermission("manageCustomers")) return;
+    const next = customers.map((customer) =>
+      customer.id === id
+        ? { ...customer, status: customer.status === "Activo" ? "Suspendido" as const : "Activo" as const }
+        : customer,
+    );
+    setCustomers(next);
+    localStorage.setItem(CUSTOMER_STORAGE_KEY, JSON.stringify(next));
+    showNotice("Estado del cliente actualizado.");
+  };
+
+  const saveSetting = (key: keyof typeof settings, value: boolean) => {
+    if (!hasPermission("settings")) return;
+    const next = { ...settings, [key]: value };
+    setSettings(next);
+    localStorage.setItem("angval_admin_settings", JSON.stringify(next));
+    showNotice("Preferencias guardadas.");
+  };
+
+  const openAccountAccess = (account: ManagedAccount) => {
+    if (!isAdmin || account.role === "admin") return;
+    setEditingAccount(account);
+    setAccessRole(account.role === "deputy" ? "deputy" : "customer");
+    setAccessPermissions(account.role === "deputy" ? account.permissions : []);
+    setAccessDialog(true);
+  };
+
+  const togglePermission = (permission: StaffPermission, checked: boolean) => {
+    setAccessPermissions((current) =>
+      checked
+        ? [...new Set([...current, permission])]
+        : current.filter((item) => item !== permission),
+    );
+  };
+
+  const saveAccountAccess = () => {
+    if (!editingAccount || !isAdmin) return;
+    const saved = updateManagedAccount(editingAccount.email, accessRole, accessPermissions);
+    if (!saved) {
+      showNotice("No fue posible actualizar esta cuenta.");
+      return;
+    }
+    setAccounts(listManagedAccounts());
+    setAccessDialog(false);
+    showNotice(
+      accessRole === "customer"
+        ? `${editingAccount.name} ahora tiene el rol Cliente.`
+        : `Permisos de ${editingAccount.name} actualizados.`,
+    );
+  };
+
+  const navItems = [
+    { id: "overview" as const, label: "Resumen", icon: LayoutDashboard, allowed: true },
+    { id: "products" as const, label: "Productos", icon: Package, allowed: hasPermission("inventory") },
+    { id: "orders" as const, label: "Pedidos y logística", icon: Truck, allowed: hasPermission("orders") },
+    { id: "customers" as const, label: "Clientes y roles", icon: Users, allowed: hasPermission("viewCustomers") || hasPermission("manageCustomers") },
+    { id: "settings" as const, label: "Configuración", icon: Settings, allowed: hasPermission("settings") },
+  ];
+
+  const pageMeta: Record<Section, { title: string; description: string }> = {
+    overview: { title: "Centro de operaciones", description: "Vista general del rendimiento de AngVal Beauty." },
+    products: { title: "Inventario y catálogo", description: isAdmin ? "Crea, edita y controla todos los productos." : "Consulta el catálogo y actualiza existencias." },
+    orders: { title: "Pedidos y logística", description: "Gestiona preparación, despacho y entregas." },
+    customers: { title: "Clientes y roles", description: "Administra cuentas, roles y permisos de acceso." },
+    settings: { title: "Configuración", description: "Preferencias generales y reglas operativas." },
+  };
+
+  return (
+    <div className="min-h-screen bg-muted/40 text-foreground md:flex">
+      <aside className={`fixed inset-y-0 left-0 z-50 w-72 border-r border-border bg-card transition-transform md:sticky md:top-0 md:flex md:h-screen md:translate-x-0 md:flex-col ${mobileMenu ? "translate-x-0" : "-translate-x-full"}`}>
+        <div className="flex h-20 items-center justify-between border-b border-border px-6">
+          <Logo />
+          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setMobileMenu(false)} aria-label="Cerrar menú">
+            <X />
+          </Button>
+        </div>
+        <div className="px-5 py-6">
+          <div className="mb-6 rounded-xl border border-primary/15 bg-primary/5 p-4">
+            <div className="mb-2 flex items-center gap-2">
+              {isAdmin ? <ShieldCheck className="size-4 text-primary" /> : <Truck className="size-4 text-primary" />}
+              <Badge variant={isAdmin ? "default" : "secondary"}>
+                {isAdmin ? "Administrador" : "Suplente de administrador"}
+              </Badge>
+            </div>
+            <div className="truncate text-sm font-semibold">{user.name}</div>
+            <div className="truncate text-xs text-muted-foreground">{user.email}</div>
+          </div>
+          <nav className="space-y-1">
+            {navItems.map(({ id, label, icon: Icon, allowed }) => (
+              <Button
+                key={id}
+                variant={section === id ? "secondary" : "ghost"}
+                className={`w-full justify-start ${!allowed ? "opacity-45" : ""}`}
+                disabled={!allowed}
+                onClick={() => changeSection(id)}
+              >
+                <Icon />
+                {label}
+                {!allowed && <LockKeyhole className="ml-auto size-3.5" />}
+              </Button>
+            ))}
+          </nav>
+        </div>
+        <div className="mt-auto space-y-2 border-t border-border p-5">
+          <Button variant="outline" className="w-full justify-start" onClick={() => navigate("/tienda")}>
+            <ShoppingBag /> Ver tienda
+          </Button>
+          <Button
+            variant="ghost"
+            className="w-full justify-start text-destructive hover:text-destructive"
+            onClick={() => { logout(); navigate("/auth"); }}
+          >
+            <LogOut /> Cerrar sesión
+          </Button>
+        </div>
+      </aside>
+
+      {mobileMenu && <div className="fixed inset-0 z-40 bg-foreground/30 md:hidden" onClick={() => setMobileMenu(false)} />}
+
+      <main className="min-w-0 flex-1">
+        <header className="sticky top-0 z-30 flex h-20 items-center gap-4 border-b border-border bg-background/95 px-4 backdrop-blur sm:px-8">
+          <Button variant="outline" size="icon" className="md:hidden" onClick={() => setMobileMenu(true)} aria-label="Abrir menú">
+            <Menu />
+          </Button>
+          <div className="min-w-0 flex-1">
+            <div className="truncate font-serif text-xl font-semibold sm:text-2xl">{pageMeta[section].title}</div>
+            <div className="hidden text-sm text-muted-foreground sm:block">{pageMeta[section].description}</div>
+          </div>
+          <Badge variant="outline" className="hidden sm:flex">
+            <span className="size-2 rounded-full bg-emerald-500" /> Sistema operativo
+          </Badge>
+        </header>
+
+        <div className="mx-auto max-w-7xl space-y-6 p-4 sm:p-8">
+          {notice && (
+            <div className="flex items-center gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm font-medium text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-200">
+              <CheckCircle2 className="size-4" /> {notice}
+            </div>
+          )}
+
+          {!isAdmin && (
+            <Card className="border-secondary/40 bg-secondary/10">
+              <CardContent className="flex gap-3 py-4">
+                <LockKeyhole className="mt-0.5 size-5 shrink-0 text-secondary" />
+                <div>
+                  <div className="font-semibold">Acceso logístico limitado</div>
+                  <div className="text-sm text-muted-foreground">
+                    Puedes actualizar inventario y estados de pedidos. Clientes, configuración, precios y eliminación de productos requieren autorización del administrador.
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {section === "overview" && (
+            <>
+              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                {[
+                  { label: "Ventas del mes", value: "$8.420,60", detail: "+12,4% frente al mes anterior", icon: TrendingUp },
+                  { label: "Pedidos activos", value: orders.filter((order) => !["Entregado", "Cancelado"].includes(order.status)).length, detail: `${orders.filter((order) => order.status === "Pendiente").length} requieren atención`, icon: ClipboardList },
+                  { label: "Productos", value: products.length, detail: `${products.filter((product) => product.stock <= 20).length} con stock bajo`, icon: Box },
+                  { label: "Clientes", value: customers.length, detail: "Base activa de compradores", icon: Users },
+                ].map(({ label, value, detail, icon: Icon }) => (
+                  <Card key={label} className="gap-4">
+                    <CardHeader className="flex-row items-start justify-between">
+                      <div>
+                        <CardDescription>{label}</CardDescription>
+                        <CardTitle className="mt-2 font-serif text-3xl">{value}</CardTitle>
+                      </div>
+                      <div className="rounded-xl bg-primary/10 p-2.5 text-primary"><Icon className="size-5" /></div>
+                    </CardHeader>
+                    <CardContent className="text-xs text-muted-foreground">{detail}</CardContent>
+                  </Card>
+                ))}
+              </div>
+
+              <div className="grid gap-6 xl:grid-cols-[1.4fr_1fr]">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><BarChart3 className="size-5 text-primary" /> Rendimiento semanal</CardTitle>
+                    <CardDescription>Ingresos procesados durante los últimos siete días.</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="flex h-52 items-end gap-3">
+                      {[42, 58, 46, 76, 64, 92, 80].map((height, index) => (
+                        <div key={index} className="flex h-full flex-1 flex-col justify-end gap-2">
+                          <div className="rounded-t-md bg-primary/85 transition-all hover:bg-primary" style={{ height: `${height}%` }} />
+                          <div className="text-center text-xs text-muted-foreground">{["L", "M", "M", "J", "V", "S", "D"][index]}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Alertas de inventario</CardTitle>
+                    <CardDescription>Productos que necesitan reposición prioritaria.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {[...products].sort((a, b) => a.stock - b.stock).slice(0, 4).map((product) => (
+                      <div key={product.id} className="flex items-center gap-3">
+                        <img src={product.image} alt="" className="size-11 rounded-lg bg-muted object-cover" />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-sm font-medium">{product.name}</div>
+                          <div className="text-xs text-muted-foreground">{product.category}</div>
+                        </div>
+                        <Badge variant={product.stock < 10 ? "destructive" : "secondary"}>{product.stock} und.</Badge>
+                      </div>
+                    ))}
+                    <Button variant="outline" className="w-full" onClick={() => changeSection("products")}>
+                      Gestionar inventario <ChevronRight />
+                    </Button>
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader className="flex-row items-center justify-between">
+                  <div>
+                    <CardTitle>Pedidos recientes</CardTitle>
+                    <CardDescription>Últimos movimientos de la operación.</CardDescription>
+                  </div>
+                  <Button variant="ghost" onClick={() => changeSection("orders")}>Ver todos <ChevronRight /></Button>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {orders.slice(0, 4).map((order) => (
+                      <div key={order.id} className="flex flex-col gap-3 rounded-xl border border-border p-4 sm:flex-row sm:items-center">
+                        <div className="rounded-lg bg-muted p-2"><Package className="size-4" /></div>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold">{order.id} · {order.customer}</div>
+                          <div className="text-xs text-muted-foreground">{order.city} · {order.items} productos</div>
+                        </div>
+                        <Badge className={statusClasses(order.status)}>{order.status}</Badge>
+                        <div className="text-sm font-semibold">${order.total.toFixed(2)}</div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {section === "products" && (
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input className="pl-10" placeholder="Buscar por producto, marca o categoría" value={query} onChange={(event) => setQuery(event.target.value)} />
+                </div>
+                {hasPermission("exports") && <Button
+                  variant="outline"
+                  onClick={() => downloadCsv("inventario-angval.csv", [
+                    ["ID", "Producto", "Marca", "Categoría", "Precio", "Stock"],
+                    ...products.map((product) => [product.id, product.name, product.brand, product.category, product.price, product.stock]),
+                  ])}
+                >
+                  <Download /> Exportar
+                </Button>}
+                {isAdmin && <Button onClick={() => openProduct()}><Plus /> Nuevo producto</Button>}
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Producto</TableHead>
+                        <TableHead>Categoría</TableHead>
+                        <TableHead>Precio</TableHead>
+                        <TableHead>Stock</TableHead>
+                        <TableHead className="text-right">Acciones</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProducts.map((product) => (
+                        <TableRow key={product.id}>
+                          <TableCell>
+                            <div className="flex items-center gap-3">
+                              <img src={product.image} alt="" className="size-12 rounded-lg bg-muted object-cover" />
+                              <div className="max-w-72">
+                                <div className="truncate font-medium">{product.name}</div>
+                                <div className="text-xs text-muted-foreground">{product.brand} · ID {product.id}</div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell><Badge variant="outline">{product.category}</Badge></TableCell>
+                          <TableCell className="font-medium">${product.price.toFixed(2)}</TableCell>
+                          <TableCell>
+                            <Badge variant={product.stock < 10 ? "destructive" : product.stock <= 20 ? "secondary" : "outline"}>
+                              {product.stock} unidades
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex justify-end gap-1">
+                              <Button variant="ghost" size="icon" onClick={() => openProduct(product)} aria-label={isAdmin ? "Editar producto" : "Ajustar stock"}>
+                                <Pencil />
+                              </Button>
+                              {isAdmin && (
+                                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive" onClick={() => deleteProduct(product)} aria-label="Eliminar producto">
+                                  <Trash2 />
+                                </Button>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {filteredProducts.length === 0 && <div className="p-12 text-center text-sm text-muted-foreground">No se encontraron productos.</div>}
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {section === "orders" && (
+            <>
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative flex-1">
+                  <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input className="pl-10" placeholder="Buscar pedido, cliente, ciudad o estado" value={query} onChange={(event) => setQuery(event.target.value)} />
+                </div>
+                {hasPermission("exports") && <Button
+                  variant="outline"
+                  onClick={() => downloadCsv("pedidos-angval.csv", [
+                    ["Pedido", "Cliente", "Ciudad", "Total", "Transportadora", "Estado"],
+                    ...orders.map((order) => [order.id, order.customer, order.city, order.total, order.carrier, order.status]),
+                  ])}
+                >
+                  <Download /> Exportar
+                </Button>}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-3">
+                {[
+                  { label: "Por preparar", value: orders.filter((order) => ["Pendiente", "Preparando"].includes(order.status)).length },
+                  { label: "En tránsito", value: orders.filter((order) => order.status === "Despachado").length },
+                  { label: "Completados", value: orders.filter((order) => order.status === "Entregado").length },
+                ].map((item) => (
+                  <Card key={item.label} className="gap-2 p-5">
+                    <CardDescription>{item.label}</CardDescription>
+                    <CardTitle className="font-serif text-3xl">{item.value}</CardTitle>
+                  </Card>
+                ))}
+              </div>
+              <Card>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Pedido</TableHead>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Destino</TableHead>
+                        <TableHead>Total</TableHead>
+                        <TableHead>Transportadora</TableHead>
+                        <TableHead>Estado</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredOrders.map((order) => (
+                        <TableRow key={order.id}>
+                          <TableCell>
+                            <div className="font-semibold">{order.id}</div>
+                            <div className="text-xs text-muted-foreground">{order.date} · {order.items} artículos</div>
+                          </TableCell>
+                          <TableCell>
+                            <div>{order.customer}</div>
+                            <div className="text-xs text-muted-foreground">{order.email}</div>
+                          </TableCell>
+                          <TableCell>{order.city}</TableCell>
+                          <TableCell className="font-semibold">${order.total.toFixed(2)}</TableCell>
+                          <TableCell>{order.carrier}</TableCell>
+                          <TableCell>
+                            <Select value={order.status} onValueChange={(value) => updateOrderStatus(order.id, value as OrderStatus)}>
+                              <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                {["Pendiente", "Preparando", "Despachado", "Entregado", "Cancelado"].map((status) => (
+                                  <SelectItem key={status} value={status}>{status}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {section === "customers" && (hasPermission("viewCustomers") || hasPermission("manageCustomers")) && (
+            <>
+              {isAdmin && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2"><UserCog className="size-5 text-primary" /> Roles y permisos</CardTitle>
+                    <CardDescription>
+                      Las cuentas nuevas se crean siempre como Cliente. Puedes convertirlas en subadministradores y elegir sus permisos.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Cuenta</TableHead>
+                          <TableHead>Rol actual</TableHead>
+                          <TableHead>Permisos habilitados</TableHead>
+                          <TableHead className="text-right">Acción</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {accounts.map((account) => (
+                          <TableRow key={account.email}>
+                            <TableCell>
+                              <div className="font-medium">{account.name}</div>
+                              <div className="text-xs text-muted-foreground">{account.email}</div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant={account.role === "admin" ? "default" : account.role === "deputy" ? "secondary" : "outline"}>
+                                {account.role === "admin" ? "Administrador" : account.role === "deputy" ? "Subadministrador" : "Cliente"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <div className="max-w-md text-xs text-muted-foreground">
+                                {account.role === "admin"
+                                  ? "Acceso total"
+                                  : account.permissions.length
+                                    ? account.permissions.map((permission) => PERMISSION_OPTIONS.find((option) => option.id === permission)?.label).filter(Boolean).join(", ")
+                                    : "Sin permisos administrativos"}
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={account.role === "admin"}
+                                onClick={() => openAccountAccess(account)}
+                              >
+                                <UserCog /> Asignar acceso
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                    {accounts.length <= 2 && (
+                      <div className="border-t border-border p-5 text-sm text-muted-foreground">
+                        Los usuarios aparecerán aquí después de registrarse desde la tienda.
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              )}
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Directorio de clientes</CardTitle>
+                  <CardDescription>Consulta actividad y controla el estado comercial de las cuentas.</CardDescription>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Cliente</TableHead>
+                        <TableHead>Pedidos</TableHead>
+                        <TableHead>Compra acumulada</TableHead>
+                        <TableHead>Estado</TableHead>
+                        {hasPermission("manageCustomers") && <TableHead className="text-right">Acción</TableHead>}
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {customers.map((customer) => (
+                        <TableRow key={customer.id}>
+                          <TableCell>
+                            <div className="font-medium">{customer.name}</div>
+                            <div className="text-xs text-muted-foreground">{customer.email} · {customer.id}</div>
+                          </TableCell>
+                          <TableCell>{customer.orders}</TableCell>
+                          <TableCell className="font-medium">${customer.spent.toFixed(2)}</TableCell>
+                          <TableCell>
+                            <Badge variant={customer.status === "Activo" ? "outline" : "destructive"}>{customer.status}</Badge>
+                          </TableCell>
+                          {hasPermission("manageCustomers") && (
+                            <TableCell className="text-right">
+                              <Button variant="outline" size="sm" onClick={() => toggleCustomer(customer.id)}>
+                                {customer.status === "Activo" ? "Suspender" : "Reactivar"}
+                              </Button>
+                            </TableCell>
+                          )}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            </>
+          )}
+
+          {section === "settings" && hasPermission("settings") && (
+            <div className="grid gap-6 lg:grid-cols-2">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Automatización operativa</CardTitle>
+                  <CardDescription>Define las alertas y reglas del flujo logístico.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {[
+                    { key: "lowStockAlerts" as const, title: "Alertas de stock bajo", description: "Avisar cuando un producto tenga 20 unidades o menos." },
+                    { key: "orderNotifications" as const, title: "Notificaciones de pedidos", description: "Mostrar alertas al recibir una nueva compra." },
+                    { key: "autoDispatch" as const, title: "Despacho automático", description: "Enviar pedidos pagados a preparación sin revisión manual." },
+                  ].map((item) => (
+                    <div key={item.key} className="flex items-center justify-between gap-5 rounded-xl border border-border p-4">
+                      <div>
+                        <div className="text-sm font-semibold">{item.title}</div>
+                        <div className="text-xs text-muted-foreground">{item.description}</div>
+                      </div>
+                      <Switch checked={settings[item.key]} onCheckedChange={(value) => saveSetting(item.key, value)} />
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Roles y permisos</CardTitle>
+                  <CardDescription>Resumen de las capacidades asignadas al equipo.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="rounded-xl border border-border p-4">
+                    <div className="mb-1 flex items-center gap-2 font-semibold"><ShieldCheck className="size-4 text-primary" /> Administrador</div>
+                    <div className="text-sm text-muted-foreground">Acceso total a catálogo, pedidos, clientes, reportes y configuración.</div>
+                  </div>
+                  <div className="rounded-xl border border-border p-4">
+                    <div className="mb-1 flex items-center gap-2 font-semibold"><Truck className="size-4 text-secondary" /> Suplente de administrador</div>
+                    <div className="text-sm text-muted-foreground">Sus capacidades se asignan individualmente desde Clientes y roles. Nunca puede crear roles ni eliminar productos.</div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      </main>
+
+      <Dialog open={productDialog} onOpenChange={setProductDialog}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{!isAdmin ? "Ajustar inventario" : editingProduct ? "Editar producto" : "Nuevo producto"}</DialogTitle>
+            <DialogDescription>
+              {!isAdmin ? "Como suplente, solo puedes modificar las unidades disponibles." : "Los cambios se reflejarán en el catálogo público de la tienda."}
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={submitProduct} className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2 sm:col-span-2">
+                <Label htmlFor="product-name">Nombre</Label>
+                <Input id="product-name" required disabled={!isAdmin} value={productForm.name} onChange={(event) => setProductForm({ ...productForm, name: event.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-brand">Marca</Label>
+                <Input id="product-brand" required disabled={!isAdmin} value={productForm.brand} onChange={(event) => setProductForm({ ...productForm, brand: event.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label>Categoría</Label>
+                <Select disabled={!isAdmin} value={productForm.category} onValueChange={(value) => setProductForm({ ...productForm, category: value })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {CATEGORIES.filter((category) => category !== "Todos").map((category) => (
+                      <SelectItem key={category} value={category}>{category}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-price">Precio</Label>
+                <Input id="product-price" type="number" min="0.01" step="0.01" required disabled={!isAdmin} value={productForm.price} onChange={(event) => setProductForm({ ...productForm, price: event.target.value })} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="product-stock">Unidades disponibles</Label>
+                <Input id="product-stock" type="number" min="0" required value={productForm.stock} onChange={(event) => setProductForm({ ...productForm, stock: event.target.value })} />
+              </div>
+              {isAdmin && (
+                <>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="product-image">URL de imagen</Label>
+                    <Input id="product-image" type="url" value={productForm.image} onChange={(event) => setProductForm({ ...productForm, image: event.target.value })} placeholder="https://..." />
+                  </div>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label htmlFor="product-description">Descripción</Label>
+                    <Textarea id="product-description" value={productForm.description} onChange={(event) => setProductForm({ ...productForm, description: event.target.value })} />
+                  </div>
+                </>
+              )}
+            </div>
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={() => setProductDialog(false)}>Cancelar</Button>
+              <Button type="submit">{!isAdmin ? "Guardar inventario" : editingProduct ? "Guardar cambios" : "Crear producto"}</Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={accessDialog} onOpenChange={setAccessDialog}>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-xl">
+          <DialogHeader>
+            <DialogTitle>Asignar rol y permisos</DialogTitle>
+            <DialogDescription>
+              Configura el acceso de {editingAccount?.name}. Los cambios se aplicarán en su próximo inicio de sesión.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-5">
+            <div className="space-y-2">
+              <Label>Rol de la cuenta</Label>
+              <Select
+                value={accessRole}
+                onValueChange={(value) => {
+                  const role = value as "customer" | "deputy";
+                  setAccessRole(role);
+                  if (role === "customer") setAccessPermissions([]);
+                }}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="customer">Cliente</SelectItem>
+                  <SelectItem value="deputy">Subadministrador</SelectItem>
+                </SelectContent>
+              </Select>
+              <div className="text-xs text-muted-foreground">
+                El rol Cliente no tiene acceso al panel administrativo.
+              </div>
+            </div>
+
+            <div className={accessRole === "customer" ? "pointer-events-none space-y-3 opacity-40" : "space-y-3"}>
+              <div>
+                <div className="text-sm font-semibold">Permisos del subadministrador</div>
+                <div className="text-xs text-muted-foreground">Selecciona únicamente las funciones necesarias para esta cuenta.</div>
+              </div>
+              {PERMISSION_OPTIONS.map((permission) => (
+                <Label
+                  key={permission.id}
+                  htmlFor={`permission-${permission.id}`}
+                  className="flex cursor-pointer items-start gap-3 rounded-xl border border-border p-4"
+                >
+                  <Checkbox
+                    id={`permission-${permission.id}`}
+                    checked={accessPermissions.includes(permission.id)}
+                    disabled={accessRole === "customer"}
+                    onCheckedChange={(checked) => togglePermission(permission.id, checked === true)}
+                  />
+                  <span className="space-y-1">
+                    <span className="block text-sm font-semibold">{permission.label}</span>
+                    <span className="block text-xs font-normal text-muted-foreground">{permission.description}</span>
+                  </span>
+                </Label>
+              ))}
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAccessDialog(false)}>Cancelar</Button>
+            <Button onClick={saveAccountAccess}>Guardar acceso</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}

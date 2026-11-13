@@ -1,0 +1,194 @@
+import { useState } from 'react';
+import { Button } from './ui/button';
+import { Input } from './ui/input';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
+import { Label } from './ui/label';
+import { Alert, AlertDescription } from './ui/alert';
+import { CheckCircle2, Mail } from 'lucide-react';
+
+export function PasswordRecovery() {
+  const [email, setEmail] = useState('');
+  const [step, setStep] = useState<'request' | 'sent' | 'reset'>('request');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
+
+  const handleRequestReset = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+
+    if (!email) {
+      setError('Por favor ingresa tu correo electrónico');
+      return;
+    }
+
+    // Mock: Simular envío de correo
+    setSuccess(`Se ha enviado un correo de recuperación a ${email}`);
+    setStep('sent');
+  };
+
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!newPassword || !confirmPassword) {
+      setError('Por favor completa todos los campos');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      setError('La contraseña debe tener al menos 6 caracteres');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('Las contraseñas no coinciden');
+      return;
+    }
+
+    // Mock: Simular cambio de contraseña
+    setSuccess('Tu contraseña ha sido actualizada exitosamente');
+    setTimeout(() => {
+      setStep('request');
+      setEmail('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setSuccess('');
+    }, 2000);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-secondary/10 via-background to-accent/10">
+      <Card className="w-full max-w-md shadow-xl border-2 border-secondary/20">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl">Recuperar Contraseña</CardTitle>
+          <CardDescription>
+            {step === 'request' && 'Ingresa tu correo electrónico para recibir instrucciones'}
+            {step === 'sent' && 'Revisa tu correo electrónico'}
+            {step === 'reset' && 'Crea una nueva contraseña segura'}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {step === 'request' && (
+            <form onSubmit={handleRequestReset} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="email">Correo Electrónico</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="tu@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                />
+              </div>
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {success && (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertDescription>{success}</AlertDescription>
+                </Alert>
+              )}
+
+              <Button type="submit" className="w-full">
+                <Mail className="mr-2 h-4 w-4" />
+                Enviar Instrucciones
+              </Button>
+            </form>
+          )}
+
+          {step === 'sent' && (
+            <div className="space-y-4">
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertDescription>
+                  Hemos enviado un enlace de recuperación a tu correo. Por favor revisa tu bandeja de entrada.
+                </AlertDescription>
+              </Alert>
+
+              <div className="pt-4 text-center space-y-2">
+                <p className="text-sm text-muted-foreground">
+                  ¿Ya tienes el código de recuperación?
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={() => setStep('reset')}
+                  className="w-full"
+                >
+                  Restablecer Contraseña
+                </Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setStep('request')}
+                  className="w-full"
+                >
+                  Volver
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {step === 'reset' && (
+            <form onSubmit={handleResetPassword} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="newPassword">Nueva Contraseña</Label>
+                <Input
+                  id="newPassword"
+                  type="password"
+                  placeholder="Mínimo 6 caracteres"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirmar Contraseña</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  placeholder="Repite tu contraseña"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+
+              {error && (
+                <Alert variant="destructive">
+                  <AlertDescription>{error}</AlertDescription>
+                </Alert>
+              )}
+
+              {success && (
+                <Alert>
+                  <CheckCircle2 className="h-4 w-4" />
+                  <AlertDescription>{success}</AlertDescription>
+                </Alert>
+              )}
+
+              <div className="space-y-2">
+                <Button type="submit" className="w-full">
+                  Actualizar Contraseña
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  onClick={() => setStep('request')}
+                  className="w-full"
+                >
+                  Volver
+                </Button>
+              </div>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}

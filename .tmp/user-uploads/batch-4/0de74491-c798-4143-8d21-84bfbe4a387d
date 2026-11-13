@@ -1,0 +1,219 @@
+import { useState } from "react";
+import { Link, useParams, useNavigate } from "react-router";
+import { Star, Heart, ShoppingBag, ArrowLeft, Check, ChevronRight, Truck, RotateCcw, Shield, Minus, Plus } from "lucide-react";
+import { PRODUCTS } from "../data/products";
+import { useCart } from "../context/CartContext";
+
+const BADGE_STYLES: Record<string, string> = {
+  "Más Vendido": "bg-[#B8324A] text-white",
+  "Nuevo": "bg-[#2A1520] text-white",
+  "Oferta": "bg-[#C9973A] text-white",
+  "Lujo": "bg-gradient-to-r from-[#C9973A] to-[#e8c06a] text-white",
+  "Exclusivo": "bg-[#6D3A5A] text-white",
+};
+
+export function ProductDetail() {
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const { addToCart, toggleWishlist, wishlist, setCartOpen } = useCart();
+  const [qty, setQty] = useState(1);
+  const [added, setAdded] = useState(false);
+
+  const product = PRODUCTS.find((p) => p.id === Number(id));
+
+  if (!product) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] text-center px-6">
+        <h2 className="text-xl font-bold text-foreground mb-2">Producto no encontrado</h2>
+        <p className="text-muted-foreground text-sm mb-4">El producto que buscas no existe o fue removido.</p>
+        <Link to="/catalogo" className="text-[#B8324A] font-semibold text-sm hover:underline">
+          Volver al catálogo
+        </Link>
+      </div>
+    );
+  }
+
+  const inWishlist = wishlist.includes(product.id);
+  const related = PRODUCTS.filter((p) => p.category === product.category && p.id !== product.id).slice(0, 4);
+
+  function handleAdd() {
+    for (let i = 0; i < qty; i++) addToCart(product);
+    setAdded(true);
+    setCartOpen(true);
+    setTimeout(() => setAdded(false), 2000);
+  }
+
+  const discount = product.originalPrice
+    ? Math.round((1 - product.price / product.originalPrice) * 100)
+    : null;
+
+  return (
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-10">
+      {/* Breadcrumb */}
+      <nav className="text-xs text-muted-foreground mb-8 flex items-center gap-1.5">
+        <Link to="/tienda" className="hover:text-[#B8324A] transition-colors">Inicio</Link>
+        <ChevronRight className="w-3 h-3" />
+        <Link to="/catalogo" className="hover:text-[#B8324A] transition-colors">Catálogo</Link>
+        <ChevronRight className="w-3 h-3" />
+        <Link to={`/catalogo?cat=${product.category}`} className="hover:text-[#B8324A] transition-colors">{product.category}</Link>
+        <ChevronRight className="w-3 h-3" />
+        <span className="text-foreground font-medium truncate max-w-[200px]">{product.name}</span>
+      </nav>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 mb-16">
+        {/* Image */}
+        <div className="relative">
+          <button
+            onClick={() => navigate(-1)}
+            className="absolute top-4 left-4 z-10 p-2 bg-white/90 hover:bg-white rounded-full shadow-sm transition-colors flex items-center gap-1.5 text-xs font-medium text-foreground"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+          </button>
+          <div className="aspect-square rounded-3xl overflow-hidden bg-muted">
+            <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+          </div>
+          {product.badge && (
+            <span className={`absolute top-4 right-4 text-xs font-bold px-3 py-1.5 rounded-full ${BADGE_STYLES[product.badge]}`}>
+              {product.badge}
+            </span>
+          )}
+        </div>
+
+        {/* Info */}
+        <div className="flex flex-col">
+          <div className="flex-1">
+            <p className="text-xs font-bold text-[#C9973A] uppercase tracking-widest mb-2">{product.brand} · {product.subcategory}</p>
+            <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-4 leading-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
+              {product.name}
+            </h1>
+
+            {/* Rating */}
+            <div className="flex items-center gap-2 mb-5">
+              <div className="flex gap-0.5">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <Star key={s} className={`w-4 h-4 ${s <= Math.round(product.rating) ? "fill-[#C9973A] text-[#C9973A]" : "text-gray-200"}`} />
+                ))}
+              </div>
+              <span className="text-sm font-semibold text-foreground">{product.rating}</span>
+              <span className="text-sm text-muted-foreground">({product.reviews.toLocaleString()} reseñas)</span>
+            </div>
+
+            {/* Price */}
+            <div className="flex items-baseline gap-3 mb-6">
+              <span className="text-4xl font-bold text-[#B8324A]">${product.price.toFixed(2)}</span>
+              {product.originalPrice && (
+                <>
+                  <span className="text-lg text-muted-foreground line-through">${product.originalPrice.toFixed(2)}</span>
+                  <span className="bg-green-100 text-green-700 text-sm font-bold px-2.5 py-1 rounded-full">
+                    -{discount}% OFF
+                  </span>
+                </>
+              )}
+            </div>
+
+            {/* Description */}
+            <p className="text-muted-foreground text-sm leading-relaxed mb-6">{product.description}</p>
+
+            {/* Details */}
+            <div className="bg-muted rounded-xl p-4 mb-6">
+              <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3">Características</p>
+              <ul className="grid grid-cols-1 sm:grid-cols-2 gap-y-2 gap-x-4">
+                {product.details.map((d) => (
+                  <li key={d} className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Check className="w-3.5 h-3.5 text-[#B8324A] flex-shrink-0" />
+                    {d}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* Stock */}
+            <div className="flex items-center gap-2 mb-6">
+              <div className={`w-2 h-2 rounded-full ${product.stock > 20 ? "bg-green-500" : product.stock > 5 ? "bg-orange-400" : "bg-red-500"}`} />
+              <span className="text-xs text-muted-foreground">
+                {product.stock > 20 ? "En stock" : product.stock > 5 ? `Solo quedan ${product.stock} unidades` : `¡Últimas ${product.stock} unidades!`}
+              </span>
+            </div>
+          </div>
+
+          {/* Actions */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center border border-border rounded-full overflow-hidden">
+                <button onClick={() => setQty((q) => Math.max(1, q - 1))} className="px-4 py-3 hover:bg-muted transition-colors">
+                  <Minus className="w-4 h-4" />
+                </button>
+                <span className="w-10 text-center text-sm font-semibold">{qty}</span>
+                <button onClick={() => setQty((q) => Math.min(product.stock, q + 1))} className="px-4 py-3 hover:bg-muted transition-colors">
+                  <Plus className="w-4 h-4" />
+                </button>
+              </div>
+              <button
+                onClick={handleAdd}
+                className={`flex-1 flex items-center justify-center gap-2 py-3.5 rounded-full font-semibold text-sm transition-all ${
+                  added
+                    ? "bg-green-500 text-white"
+                    : "bg-[#B8324A] hover:bg-[#9e2a3f] text-white hover:shadow-lg hover:shadow-[#B8324A]/30"
+                }`}
+              >
+                {added ? <><Check className="w-4 h-4" /> Agregado!</> : <><ShoppingBag className="w-4 h-4" /> Agregar al carrito</>}
+              </button>
+            </div>
+            <button
+              onClick={() => toggleWishlist(product.id)}
+              className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-full font-semibold text-sm border transition-colors ${
+                inWishlist
+                  ? "border-[#B8324A] text-[#B8324A] bg-[#B8324A]/5"
+                  : "border-border text-muted-foreground hover:border-[#B8324A] hover:text-[#B8324A]"
+              }`}
+            >
+              <Heart className={`w-4 h-4 ${inWishlist ? "fill-[#B8324A]" : ""}`} />
+              {inWishlist ? "Guardado en favoritos" : "Añadir a favoritos"}
+            </button>
+          </div>
+
+          {/* Trust */}
+          <div className="grid grid-cols-3 gap-3 mt-5">
+            {[
+              { icon: Truck, label: "Envío gratis +$30" },
+              { icon: RotateCcw, label: "30 días devolución" },
+              { icon: Shield, label: "Pago seguro" },
+            ].map(({ icon: Icon, label }) => (
+              <div key={label} className="flex flex-col items-center gap-1 text-center">
+                <div className="w-8 h-8 bg-muted rounded-full flex items-center justify-center">
+                  <Icon className="w-4 h-4 text-muted-foreground" />
+                </div>
+                <p className="text-[10px] text-muted-foreground leading-tight">{label}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Related */}
+      {related.length > 0 && (
+        <section className="border-t border-border pt-12">
+          <h2 className="text-2xl font-bold text-foreground mb-6" style={{ fontFamily: "'Playfair Display', serif" }}>
+            También te puede gustar
+          </h2>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+            {related.map((p) => (
+              <Link key={p.id} to={`/producto/${p.id}`} className="group block">
+                <div className="rounded-xl overflow-hidden border border-border hover:shadow-lg transition-all">
+                  <div className="aspect-square bg-muted overflow-hidden">
+                    <img src={p.image} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  </div>
+                  <div className="p-3">
+                    <p className="text-[10px] font-semibold text-[#C9973A] uppercase tracking-wide">{p.brand}</p>
+                    <h4 className="text-xs font-medium text-foreground mt-0.5 line-clamp-2 group-hover:text-[#B8324A] transition-colors">{p.name}</h4>
+                    <p className="text-sm font-bold text-[#B8324A] mt-1">${p.price.toFixed(2)}</p>
+                  </div>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+    </div>
+  );
+}

@@ -1,0 +1,174 @@
+import { Sparkles, Heart, Leaf, Award, Users, ArrowRight } from "lucide-react";
+import { Link } from "react-router";
+
+export function About() {
+  return (
+    <div>
+      {/* Hero */}
+      <section className="relative h-72 sm:h-96 overflow-hidden">
+        <img
+          src="https://images.unsplash.com/photo-1631730359585-38a4935cbec4?w=1600&h=600&fit=crop&auto=format"
+          alt="Nosotros"
+          className="w-full h-full object-cover"
+        />
+        <div className="absolute inset-0 bg-gradient-to-r from-[#2A1520]/90 via-[#2A1520]/70 to-transparent" />
+        <div className="relative z-10 h-full max-w-7xl mx-auto px-6 sm:px-8 flex items-center">
+          <div>
+            <p className="text-[#C9973A] text-xs font-bold uppercase tracking-widest mb-3">Nuestra historia</p>
+            <h1 className="text-4xl sm:text-5xl font-bold text-white leading-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Somos Beauty Rush
+            </h1>
+          </div>
+        </div>
+      </section>
+
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        {/* Mission */}
+        <section className="py-16 grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Sparkles className="w-4 h-4 text-[#C9973A]" />
+              <p className="text-[#C9973A] text-xs font-bold uppercase tracking-widest">Quiénes somos</p>
+            </div>
+            <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-6 leading-tight" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Más que cosméticos,<br />
+              <em>una experiencia.</em>
+            </h2>
+            <div className="space-y-4 text-muted-foreground leading-relaxed text-sm sm:text-base">
+              <p>
+                <strong className="text-foreground">Beauty Rush</strong> nació en 2022 con una misión clara: democratizar el acceso a los mejores cosméticos y productos de cuidado personal en Colombia, sin sacrificar calidad ni autenticidad.
+              </p>
+              <p>
+                Somos un equipo apasionado por la belleza que cree que cada persona merece sentirse poderosa, auténtica y radiante — sin importar su presupuesto o su tipo de piel. Por eso seleccionamos cuidadosamente cada producto de nuestro catálogo, verificando su autenticidad y eligiendo marcas que comparten nuestros valores.
+              </p>
+              <p>
+                Hoy, miles de clientas confían en nosotras para descubrir nuevos rituales de belleza, acceder a lanzamientos exclusivos y recibir sus cosméticos favoritos directo en su puerta con total confianza.
+              </p>
+            </div>
+          </div>
+          <div className="relative">
+            <img
+              src="https://images.unsplash.com/photo-1512496015851-a90fb38ba796?w=700&h=600&fit=crop&auto=format"
+              alt="Beauty Rush"
+              className="w-full h-80 sm:h-96 object-cover rounded-3xl"
+            />
+            <div className="absolute -bottom-5 -left-5 bg-[#B8324A] text-white rounded-2xl px-6 py-4 shadow-xl">
+              <p className="text-3xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>+12K</p>
+              <p className="text-xs opacity-80">Clientas satisfechas</p>
+            </div>
+            <div className="absolute -top-5 -right-5 bg-[#C9973A] text-white rounded-2xl px-6 py-4 shadow-xl">
+              <p className="text-3xl font-bold" style={{ fontFamily: "'Playfair Display', serif" }}>100%</p>
+              <p className="text-xs opacity-80">Productos originales</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Values */}
+        <section className="py-12 border-t border-border">
+          <div className="text-center mb-12">
+            <p className="text-[#C9973A] text-xs font-bold uppercase tracking-widest mb-3">Lo que nos mueve</p>
+            <h2 className="text-3xl font-bold text-foreground" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Nuestros valores
+            </h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[
+              {
+                icon: Award,
+                title: "Autenticidad garantizada",
+                desc: "Todos los productos son 100% originales, adquiridos directamente de distribuidores autorizados. Tu seguridad es nuestra prioridad.",
+              },
+              {
+                icon: Heart,
+                title: "Cruelty-Free primero",
+                desc: "Priorizamos marcas que no realizan pruebas en animales. La belleza ética es parte de nuestra identidad.",
+              },
+              {
+                icon: Leaf,
+                title: "Sostenibilidad",
+                desc: "Trabajamos con empaques eco-amigables y reducimos nuestro impacto ambiental en cada etapa del proceso.",
+              },
+              {
+                icon: Users,
+                title: "Comunidad",
+                desc: "Beauty Rush es una comunidad donde todas tienen voz. Escuchamos a nuestras clientas para crecer juntas.",
+              },
+            ].map(({ icon: Icon, title, desc }) => (
+              <div key={title} className="bg-card border border-border rounded-2xl p-6 hover:shadow-md transition-shadow">
+                <div className="w-11 h-11 rounded-2xl bg-accent flex items-center justify-center mb-4">
+                  <Icon className="w-5 h-5 text-[#B8324A]" />
+                </div>
+                <h3 className="text-sm font-bold text-foreground mb-2">{title}</h3>
+                <p className="text-xs text-muted-foreground leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Stats */}
+        <section className="py-12 border-t border-border">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-center">
+            {[
+              { num: "12,000+", label: "Clientas activas" },
+              { num: "250+", label: "Productos en catálogo" },
+              { num: "4.8★", label: "Calificación promedio" },
+              { num: "98%", label: "Entregas exitosas" },
+            ].map((s) => (
+              <div key={s.label}>
+                <p className="text-3xl sm:text-4xl font-bold text-[#B8324A] mb-1" style={{ fontFamily: "'Playfair Display', serif" }}>
+                  {s.num}
+                </p>
+                <p className="text-sm text-muted-foreground">{s.label}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* Team */}
+        <section className="py-12 border-t border-border">
+          <div className="text-center mb-10">
+            <p className="text-[#C9973A] text-xs font-bold uppercase tracking-widest mb-3">Las que hacen posible la magia</p>
+            <h2 className="text-3xl font-bold text-foreground" style={{ fontFamily: "'Playfair Display', serif" }}>
+              Nuestro equipo
+            </h2>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-5">
+            {[
+              { name: "Valentina Torres", role: "Fundadora & CEO", img: "https://images.unsplash.com/photo-1611451444023-7fe9d86fe1d0?w=300&h=300&fit=crop&auto=format" },
+              { name: "Sofía Ramírez", role: "Directora de Producto", img: "https://images.unsplash.com/photo-1623039497550-c4f2ccc7b875?w=300&h=300&fit=crop&auto=format" },
+              { name: "Camila Herrera", role: "Beauty Expert", img: "https://images.unsplash.com/photo-1603988089669-c041ac2fe196?w=300&h=300&fit=crop&auto=format" },
+              { name: "Isabella López", role: "Atención al Cliente", img: "https://images.unsplash.com/photo-1545912453-3d32e20f72bf?w=300&h=300&fit=crop&auto=format" },
+            ].map((m) => (
+              <div key={m.name} className="text-center group">
+                <div className="aspect-square rounded-2xl overflow-hidden bg-muted mb-3 group-hover:shadow-lg transition-shadow">
+                  <img src={m.img} alt={m.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                </div>
+                <p className="text-sm font-bold text-foreground">{m.name}</p>
+                <p className="text-xs text-muted-foreground">{m.role}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        {/* CTA */}
+        <section className="pb-16">
+          <div className="bg-gradient-to-br from-[#2A1520] to-[#4A2535] rounded-2xl px-8 py-12 text-center">
+            <Sparkles className="w-8 h-8 text-[#C9973A] mx-auto mb-4" />
+            <h3 className="text-2xl sm:text-3xl font-bold text-white mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
+              ¿Lista para descubrir tu belleza?
+            </h3>
+            <p className="text-white/60 text-sm mb-6 max-w-sm mx-auto">
+              Explora nuestra colección y encuentra los productos perfectos para ti.
+            </p>
+            <Link
+              to="/catalogo"
+              className="inline-flex items-center gap-2 bg-[#B8324A] hover:bg-[#9e2a3f] text-white px-8 py-3.5 rounded-full font-semibold text-sm transition-colors"
+            >
+              Ver catálogo <ArrowRight className="w-4 h-4" />
+            </Link>
+          </div>
+        </section>
+      </div>
+    </div>
+  );
+}

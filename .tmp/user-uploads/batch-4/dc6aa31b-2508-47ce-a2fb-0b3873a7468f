@@ -1,0 +1,37 @@
+import { createBrowserRouter } from "react-router";
+import { Root } from "./components/Root";
+import { Splash } from "./pages/Splash";
+import { Store } from "./pages/Store";
+import { Catalog } from "./pages/Catalog";
+import { ProductDetail } from "./pages/ProductDetail";
+import { AuthPage } from "./pages/Auth";
+import { About } from "./pages/About";
+import { Wishlist } from "./pages/Wishlist";
+import { Checkout } from "./pages/Checkout";
+import { Admin } from "./pages/Admin";
+
+export const router = createBrowserRouter([
+  {
+    path: "/",
+    Component: Root,
+    children: [
+      { index: true, Component: Splash },
+      { path: "tienda", Component: Store },
+      { path: "catalogo", Component: Catalog },
+      { path: "producto/:id", Component: ProductDetail },
+      { path: "productos", Component: Catalog },
+      { path: "auth", Component: AuthPage },
+      { path: "nosotros", Component: About },
+      { path: "favoritos", Component: Wishlist },
+      { path: "checkout", Component: Checkout },
+      { path: "admin", Component: Admin },
+      { path: "contacto", Component: Contact },
+    ],
+  },
+]);
+
+// Inline Contact redirect to WhatsApp
+function Contact() {
+  window.location.href = "https://wa.me/573219341523?text=Hola%2C%20me%20comunico%20desde%20Beauty%20Rush.%20Necesito%20ayuda%20con%3A";
+  return null;
+}

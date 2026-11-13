@@ -1,0 +1,430 @@
+import { useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { Check, ChevronRight, MapPin, CreditCard, Truck, ShieldCheck, Smartphone, Building2, ArrowLeft } from "lucide-react";
+import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
+import type { Address } from "../context/AuthContext";
+
+type Step = "address" | "payment" | "confirm";
+
+const DEPARTMENTS = ["Antioquia", "Atlántico", "Bogotá D.C.", "Bolívar", "Boyacá", "Caldas", "Córdoba", "Cundinamarca", "Nariño", "Norte de Santander", "Risaralda", "Santander", "Valle del Cauca"];
+
+const PAYMENT_METHODS = [
+  {
+    id: "contraentrega",
+    label: "Pago contraentrega",
+    desc: "Paga en efectivo al momento de recibir tu pedido",
+    icon: Truck,
+  },
+  {
+    id: "nequi",
+    label: "Nequi",
+    desc: "Pago inmediato mediante Nequi al número de cuenta",
+    icon: Smartphone,
+  },
+  {
+    id: "bancolombia",
+    label: "Bancolombia",
+    desc: "Transferencia o consignación bancaria",
+    icon: Building2,
+  },
+  {
+    id: "daviplata",
+    label: "Daviplata",
+    desc: "Pago rápido con tu app Daviplata",
+    icon: Smartphone,
+  },
+  {
+    id: "pse",
+    label: "PSE / Tarjeta débito o crédito",
+    desc: "Pago en línea seguro con cualquier banco",
+    icon: CreditCard,
+  },
+];
+
+function Field({
+  label, value, onChange, placeholder, required = false, type = "text", as,
+}: {
+  label: string; value: string; onChange: (v: string) => void;
+  placeholder?: string; required?: boolean; type?: string;
+  as?: "select"; options?: string[];
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-foreground mb-1.5">
+        {label} {required && <span className="text-[#B8324A]">*</span>}
+      </label>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground text-sm placeholder:text-muted-foreground outline-none focus:border-[#B8324A] focus:ring-2 focus:ring-[#B8324A]/10 transition-all"
+      />
+    </div>
+  );
+}
+
+function SelectField({
+  label, value, onChange, options, required = false,
+}: {
+  label: string; value: string; onChange: (v: string) => void;
+  options: string[]; required?: boolean;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-semibold text-foreground mb-1.5">
+        {label} {required && <span className="text-[#B8324A]">*</span>}
+      </label>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-4 py-3 rounded-xl border border-border bg-background text-foreground text-sm outline-none focus:border-[#B8324A] focus:ring-2 focus:ring-[#B8324A]/10 transition-all"
+      >
+        <option value="">Selecciona...</option>
+        {options.map((o) => <option key={o} value={o}>{o}</option>)}
+      </select>
+    </div>
+  );
+}
+
+const STEPS: { key: Step; label: string; icon: typeof MapPin }[] = [
+  { key: "address", label: "Dirección", icon: MapPin },
+  { key: "payment", label: "Pago", icon: CreditCard },
+  { key: "confirm", label: "Confirmar", icon: Check },
+];
+
+export function Checkout() {
+  const navigate = useNavigate();
+  const { cart, cartTotal, clearCart } = useCart();
+  const { user, addOrder, saveAddress } = useAuth();
+
+  const [step, setStep] = useState<Step>("address");
+  const [address, setAddress] = useState<Address>({
+    fullName: user?.name || "",
+    phone: user?.phone || "",
+    department: "",
+    city: "",
+    street: "",
+    reference: "",
+  });
+  const [paymentId, setPaymentId] = useState("");
+  const [orderDone, setOrderDone] = useState(false);
+  const [orderId, setOrderId] = useState("");
+  const [addressErrors, setAddressErrors] = useState<Record<string, string>>({});
+
+  const shipping = cartTotal >= 30 ? 0 : 8.99;
+  const total = cartTotal + shipping;
+  const paymentMethod = PAYMENT_METHODS.find((p) => p.id === paymentId);
+
+  if (cart.length === 0 && !orderDone) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-24 text-center">
+        <h2 className="text-2xl font-bold text-foreground mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>Tu carrito está vacío</h2>
+        <p className="text-muted-foreground text-sm mb-6">Agrega productos antes de proceder al pago.</p>
+        <Link to="/catalogo" className="inline-flex items-center gap-2 bg-[#B8324A] text-white px-6 py-3 rounded-full font-semibold text-sm">
+          Ir al catálogo
+        </Link>
+      </div>
+    );
+  }
+
+  if (orderDone) {
+    return (
+      <div className="max-w-lg mx-auto px-4 py-16 text-center">
+        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
+          <Check className="w-9 h-9 text-green-600" />
+        </div>
+        <h2 className="text-2xl sm:text-3xl font-bold text-foreground mb-3" style={{ fontFamily: "'Playfair Display', serif" }}>
+          ¡Pedido confirmado!
+        </h2>
+        <p className="text-muted-foreground text-sm mb-2">Tu número de pedido es:</p>
+        <p className="text-2xl font-bold text-[#B8324A] mb-6">{orderId}</p>
+        <div className="bg-card border border-border rounded-2xl p-5 text-left space-y-3 mb-6">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Método de pago</span>
+            <span className="font-semibold text-foreground">{paymentMethod?.label}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Dirección</span>
+            <span className="font-semibold text-foreground text-right max-w-[60%]">{address.street}, {address.city}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Total</span>
+            <span className="font-bold text-[#B8324A]">${total.toFixed(2)}</span>
+          </div>
+        </div>
+        {paymentId === "nequi" && (
+          <div className="bg-[#B8324A]/8 border border-[#B8324A]/20 rounded-xl p-4 text-sm text-foreground mb-6">
+            <p className="font-semibold mb-1">Instrucciones de pago — Nequi</p>
+            <p className="text-muted-foreground text-xs">Envía <strong className="text-foreground">${total.toFixed(2)}</strong> al número <strong className="text-foreground">321 934 1523</strong> con el concepto <strong className="text-foreground">{orderId}</strong>. Te confirmaremos tu pedido en máximo 24h.</p>
+          </div>
+        )}
+        <div className="flex gap-3">
+          <Link to="/tienda" className="flex-1 text-center py-3 border border-border rounded-full text-sm font-semibold text-foreground hover:bg-muted transition-colors">
+            Volver a la tienda
+          </Link>
+          {user && (
+            <Link to="/auth" className="flex-1 text-center py-3 bg-[#B8324A] text-white rounded-full text-sm font-semibold hover:bg-[#9e2a3f] transition-colors">
+              Ver mis pedidos
+            </Link>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  function validateAddress() {
+    const errs: Record<string, string> = {};
+    if (!address.fullName.trim()) errs.fullName = "Requerido";
+    if (!address.phone.trim()) errs.phone = "Requerido";
+    if (!address.department) errs.department = "Requerido";
+    if (!address.city.trim()) errs.city = "Requerido";
+    if (!address.street.trim()) errs.street = "Requerido";
+    setAddressErrors(errs);
+    return Object.keys(errs).length === 0;
+  }
+
+  function handleAddressNext() {
+    if (validateAddress()) setStep("payment");
+  }
+
+  function handleConfirm() {
+    if (user) {
+      saveAddress(address);
+      const order = addOrder({
+        items: cart.map((i) => ({ name: i.name, brand: i.brand, price: i.price, quantity: i.quantity, image: i.image })),
+        total,
+        paymentMethod: paymentMethod?.label || paymentId,
+        address,
+      });
+      setOrderId(order.id);
+    } else {
+      setOrderId(`BR-${Date.now().toString().slice(-6)}`);
+    }
+    clearCart();
+    setOrderDone(true);
+  }
+
+  const stepIdx = STEPS.findIndex((s) => s.key === step);
+
+  return (
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-10">
+      {/* Back */}
+      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-8">
+        <ArrowLeft className="w-4 h-4" /> Volver
+      </button>
+
+      <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-8" style={{ fontFamily: "'Playfair Display', serif" }}>
+        Finalizar compra
+      </h1>
+
+      {/* Step indicator */}
+      <div className="flex items-center gap-0 mb-10">
+        {STEPS.map((s, i) => {
+          const done = i < stepIdx;
+          const active = i === stepIdx;
+          return (
+            <div key={s.key} className="flex items-center">
+              <div className={`flex items-center gap-2 px-4 py-2 rounded-full text-xs font-semibold transition-all ${
+                done ? "bg-green-100 text-green-700" : active ? "bg-[#B8324A] text-white" : "bg-muted text-muted-foreground"
+              }`}>
+                {done ? <Check className="w-3.5 h-3.5" /> : <s.icon className="w-3.5 h-3.5" />}
+                {s.label}
+              </div>
+              {i < STEPS.length - 1 && <ChevronRight className="w-4 h-4 text-muted-foreground mx-1" />}
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Main form */}
+        <div className="lg:col-span-2">
+          {/* Address step */}
+          {step === "address" && (
+            <div className="bg-card border border-border rounded-2xl p-6 space-y-4">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2" style={{ fontFamily: "'Playfair Display', serif" }}>
+                <MapPin className="w-5 h-5 text-[#B8324A]" /> Dirección de entrega
+              </h2>
+              {user?.addresses[0] && (
+                <div className="bg-accent rounded-xl p-4">
+                  <p className="text-xs font-semibold text-foreground mb-2">📌 Dirección guardada:</p>
+                  <p className="text-xs text-muted-foreground">{user.addresses[0].fullName} — {user.addresses[0].street}, {user.addresses[0].city}</p>
+                  <button
+                    onClick={() => setAddress(user.addresses[0])}
+                    className="mt-2 text-xs text-[#B8324A] font-semibold hover:underline"
+                  >
+                    Usar esta dirección
+                  </button>
+                </div>
+              )}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2">
+                  <Field label="Nombre completo" value={address.fullName} onChange={(v) => setAddress((a) => ({ ...a, fullName: v }))} placeholder="Ana García" required />
+                  {addressErrors.fullName && <p className="text-xs text-destructive mt-1">{addressErrors.fullName}</p>}
+                </div>
+                <div>
+                  <Field label="Teléfono / Celular" type="tel" value={address.phone} onChange={(v) => setAddress((a) => ({ ...a, phone: v }))} placeholder="300 000 0000" required />
+                  {addressErrors.phone && <p className="text-xs text-destructive mt-1">{addressErrors.phone}</p>}
+                </div>
+                <div>
+                  <SelectField label="Departamento" value={address.department} onChange={(v) => setAddress((a) => ({ ...a, department: v }))} options={DEPARTMENTS} required />
+                  {addressErrors.department && <p className="text-xs text-destructive mt-1">{addressErrors.department}</p>}
+                </div>
+                <div>
+                  <Field label="Ciudad / Municipio" value={address.city} onChange={(v) => setAddress((a) => ({ ...a, city: v }))} placeholder="Medellín" required />
+                  {addressErrors.city && <p className="text-xs text-destructive mt-1">{addressErrors.city}</p>}
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Dirección" value={address.street} onChange={(v) => setAddress((a) => ({ ...a, street: v }))} placeholder="Calle 50 # 30-20, Apto 101" required />
+                  {addressErrors.street && <p className="text-xs text-destructive mt-1">{addressErrors.street}</p>}
+                </div>
+                <div className="sm:col-span-2">
+                  <Field label="Indicaciones adicionales" value={address.reference} onChange={(v) => setAddress((a) => ({ ...a, reference: v }))} placeholder="Cerca al parque, portón azul..." />
+                </div>
+              </div>
+              <button
+                onClick={handleAddressNext}
+                className="w-full bg-[#B8324A] hover:bg-[#9e2a3f] text-white py-3.5 rounded-full font-semibold text-sm transition-colors flex items-center justify-center gap-2 mt-2"
+              >
+                Continuar al pago <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+
+          {/* Payment step */}
+          {step === "payment" && (
+            <div className="bg-card border border-border rounded-2xl p-6">
+              <h2 className="text-lg font-bold text-foreground flex items-center gap-2 mb-5" style={{ fontFamily: "'Playfair Display', serif" }}>
+                <CreditCard className="w-5 h-5 text-[#B8324A]" /> Método de pago
+              </h2>
+              <div className="space-y-3 mb-6">
+                {PAYMENT_METHODS.map((pm) => (
+                  <label
+                    key={pm.id}
+                    className={`flex items-center gap-4 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                      paymentId === pm.id ? "border-[#B8324A] bg-[#B8324A]/4" : "border-border hover:border-muted-foreground"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="payment"
+                      value={pm.id}
+                      checked={paymentId === pm.id}
+                      onChange={() => setPaymentId(pm.id)}
+                      className="sr-only"
+                    />
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${paymentId === pm.id ? "bg-[#B8324A] text-white" : "bg-muted text-muted-foreground"}`}>
+                      <pm.icon className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-foreground">{pm.label}</p>
+                      <p className="text-xs text-muted-foreground">{pm.desc}</p>
+                    </div>
+                    {paymentId === pm.id && <Check className="w-4 h-4 text-[#B8324A]" />}
+                  </label>
+                ))}
+              </div>
+              <div className="flex gap-3">
+                <button onClick={() => setStep("address")} className="flex-1 py-3.5 border border-border rounded-full text-sm font-semibold text-muted-foreground hover:border-foreground transition-colors">
+                  ← Volver
+                </button>
+                <button
+                  onClick={() => paymentId && setStep("confirm")}
+                  disabled={!paymentId}
+                  className="flex-1 bg-[#B8324A] hover:bg-[#9e2a3f] disabled:opacity-50 text-white py-3.5 rounded-full font-semibold text-sm transition-colors"
+                >
+                  Confirmar →
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Confirm step */}
+          {step === "confirm" && (
+            <div className="bg-card border border-border rounded-2xl p-6 space-y-5">
+              <h2 className="text-lg font-bold text-foreground" style={{ fontFamily: "'Playfair Display', serif" }}>
+                Resumen del pedido
+              </h2>
+              <div className="bg-muted rounded-xl p-4 space-y-2">
+                <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5"><MapPin className="w-3.5 h-3.5 text-[#B8324A]" /> Entrega</p>
+                <p className="text-sm text-foreground font-semibold">{address.fullName}</p>
+                <p className="text-xs text-muted-foreground">{address.street}, {address.city}, {address.department}</p>
+                <p className="text-xs text-muted-foreground">📱 {address.phone}</p>
+              </div>
+              <div className="bg-muted rounded-xl p-4">
+                <p className="text-xs font-bold text-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5"><CreditCard className="w-3.5 h-3.5 text-[#B8324A]" /> Pago</p>
+                <p className="text-sm font-semibold text-foreground">{paymentMethod?.label}</p>
+                <p className="text-xs text-muted-foreground">{paymentMethod?.desc}</p>
+              </div>
+              <div className="space-y-3">
+                {cart.map((item) => (
+                  <div key={item.id} className="flex gap-3 items-center">
+                    <img src={item.image} alt={item.name} className="w-12 h-12 rounded-lg object-cover bg-muted flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-foreground truncate">{item.name}</p>
+                      <p className="text-xs text-muted-foreground">Cantidad: {item.quantity}</p>
+                    </div>
+                    <p className="text-sm font-bold text-[#B8324A]">${(item.price * item.quantity).toFixed(2)}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-3 pt-2">
+                <button onClick={() => setStep("payment")} className="flex-1 py-3.5 border border-border rounded-full text-sm font-semibold text-muted-foreground hover:border-foreground transition-colors">
+                  ← Volver
+                </button>
+                <button
+                  onClick={handleConfirm}
+                  className="flex-1 bg-[#B8324A] hover:bg-[#9e2a3f] text-white py-3.5 rounded-full font-semibold text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <ShieldCheck className="w-4 h-4" /> Confirmar pedido
+                </button>
+              </div>
+              {!user && (
+                <p className="text-center text-xs text-muted-foreground">
+                  <span className="text-[#B8324A] font-semibold cursor-pointer hover:underline">Crea una cuenta</span> para guardar tu historial de pedidos y hacer seguimiento.
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Order summary */}
+        <div className="lg:col-span-1">
+          <div className="bg-card border border-border rounded-2xl p-5 sticky top-24">
+            <h3 className="text-base font-bold text-foreground mb-4" style={{ fontFamily: "'Playfair Display', serif" }}>Tu pedido</h3>
+            <div className="space-y-3 mb-4">
+              {cart.map((item) => (
+                <div key={item.id} className="flex justify-between items-start gap-2">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-foreground truncate">{item.name}</p>
+                    <p className="text-[10px] text-muted-foreground">×{item.quantity}</p>
+                  </div>
+                  <p className="text-xs font-bold text-foreground whitespace-nowrap">${(item.price * item.quantity).toFixed(2)}</p>
+                </div>
+              ))}
+            </div>
+            <div className="border-t border-border pt-4 space-y-2">
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>Subtotal</span><span>${cartTotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Envío</span>
+                <span className={shipping === 0 ? "text-green-600 font-semibold" : "text-foreground"}>{shipping === 0 ? "Gratis" : `$${shipping.toFixed(2)}`}</span>
+              </div>
+              <div className="flex justify-between font-bold text-sm pt-1 border-t border-border">
+                <span className="text-foreground">Total</span>
+                <span className="text-[#B8324A]">${total.toFixed(2)}</span>
+              </div>
+            </div>
+            <div className="mt-4 flex items-center gap-2 text-xs text-muted-foreground bg-muted rounded-lg px-3 py-2">
+              <ShieldCheck className="w-3.5 h-3.5 text-green-600 flex-shrink-0" />
+              Compra 100% segura y garantizada
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
